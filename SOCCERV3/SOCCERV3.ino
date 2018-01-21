@@ -10,6 +10,11 @@
  *  Migration From AtmelStudio.
  *  
  */ 
+ 
+//카메라 유무 설정
+//#define CameraExist true     //카메라가 있음.
+#define CameraExist false  //카메라가 없음.
+
 //
 // 키 입력 값
 //
@@ -72,6 +77,7 @@ unsigned char Escape_Dir[16] = { 0  // 경계라인 감지 안됨
 //Sample Numbers for Average of Analog Value. 
 //
 #define NumberOfSamples 4   //가능한 변경하지 마세요.. 이값을 변경하고자 하면 Header File쪽도 수정해야 함.
+
 //평균을 구하기 위한 배열
 volatile unsigned int ADC_Raw[NumberOfSamples+1][18];
 //
@@ -120,7 +126,6 @@ volatile char menu = 0;
 //----------------------------------------------------------------------------
 
 #include "SOCCERV3.h"
-
 #include <TimerOne.h>
 
 void view_line(void)
@@ -244,13 +249,15 @@ void menu_display(unsigned char no)
         break;
     case 2: Lcd_Write_String(LINE2,"[BALL FOLLOWER] ");
         break;
-    case 3: Lcd_Write_String(LINE2,"VIEW IR         ");
+    case 3: Lcd_Write_String(LINE2,"[ GOAL FINDER ] ");
         break;
-    case 4: Lcd_Write_String(LINE2,"VIEW CAPTURE IR ");
+    case 4: Lcd_Write_String(LINE2,"VIEW IR         ");
         break;
-    case 5: Lcd_Write_String(LINE2,"VIEW ULTRA      ");
+    case 5: Lcd_Write_String(LINE2,"VIEW CAPTURE IR ");
         break;
-    case 6: Lcd_Write_String(LINE2,"VIEW LINE       ");
+    case 6: Lcd_Write_String(LINE2,"VIEW ULTRA      ");
+        break;
+    case 7: Lcd_Write_String(LINE2,"VIEW LINE       ");
         break;
   }
 }
@@ -388,6 +395,8 @@ void PROGRAM1(void)//공격
       dir_move(Escape_Dir[LineDetected], 100);
       delay(400);
 
+      move(0,0,0);
+
       LineDetected = 0;
     }
 
@@ -421,6 +430,8 @@ void PROGRAM2(void)
   int ultra_gap = 0;
 
   move(0,0,0);
+  MOTORD(0);    //드리블러 STOP.
+//  MOTORD(-50);    //드리블러 ON
 
   Lcd_Clear();
   Lcd_Write_String(LINE1,"RUNNING PROGRAM2");  
@@ -532,69 +543,81 @@ void PROGRAM3(void)
     else move(50,50,50);                        // 아니면 좌회전
   }
   while(ENTER) ;
+  motor_stop();
+  
+}
+
+
+void PROGRAM4(void)
+{ 
+  uint16_t blocks;
+
+/* PIXY 카메라 정보
+pixy.blocks[i].signature  The signature number of the detected object (1-7 for normal signatures)
+pixy.blocks[i].x          The x location of the center of the detected object (0 to 319)
+pixy.blocks[i].y          The y location of the center of the detected object (0 to 199)
+pixy.blocks[i].width      The width of the detected object (1 to 320)
+pixy.blocks[i].height     The height of the detected object (1 to 200)
+pixy.blocks[i].angle      The angle of the object detected object if the detected object is a color code.
+pixy.blocks[i].print()    A member function that prints the detected object information to the serial port(사용 금지)
+*/
+
+  Lcd_Clear();
+  Lcd_Write_String(LINE1,"TEST X=         ");  
+  Lcd_Write_String(LINE2," [ GOAL FINDER ]");  
+  while(ENTER) ;
+
+  while(!ENTER)   //  ENTER 키가 눌릴때까지 아래 명령 반복 EV3 루프와 동일
+  {
+    Lcd_Move(0, 8);
+    
+    if(CameraExist)
+    {
+      blocks = pixy.getBlocks();
+      if(blocks)
+      {
+          Lcd_Move(0, 8);
+          DigitDisplay(pixy.blocks[0].x);      
+
+          if(pixy.blocks[0].x > 175)        move(-50,-50,-50 );   // 만약 골대가 오른쪽에 있으면 우회전
+          else if(pixy.blocks[0].x < 145)   move(50,50,50 );      // 만약 골대가 왼쪽에 있으면 좌회전
+          else                              motor_stop();        // 골대가 중앙에 있으면 정지
+      }
+      else
+      {
+          Lcd_String("???");
+          motor_stop();
+      }
+      delay(100);
+    }
+    else  Lcd_String("NO CAM");
+  }
+  while(ENTER) ;
+  motor_stop();
+  
 }
 
 void setup(void) 
 {
 
   init_devices();
-/*  
-  pixy.init();
-
 
   Wire.begin();
-  // TWBR = 12;  // 400 kbit/sec I2C speed
-  byte c = myIMU.readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);
-  if (c == 0x71) // WHO_AM_I should always be 0x68
+
+  //FIND COMPASS SENSOR
+  if(!Check_Compass())
   {
-    // Start by performing self test and reporting values
-    myIMU.MPU9250SelfTest(myIMU.SelfTest);
-    // Calibrate gyro and accelerometers, load biases in bias registers
-    myIMU.calibrateMPU9250(myIMU.gyroBias, myIMU.accelBias);
-
-    myIMU.initMPU9250();
-    // Initialize device for active mode read of acclerometer, gyroscope, and
-    // temperature
-//    Serial.println("MPU9250 initialized for active data mode....");
-
-    // Read the WHO_AM_I register of the magnetometer, this is a good test of
-    // communication
-    byte d = myIMU.readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);
-
-    // Get magnetometer calibration from AK8963 ROM
-    myIMU.initAK8963(myIMU.magCalibration);
-    // Initialize device for active mode read of magnetometer
-//    Serial.println("AK8963 initialized for active data mode....");
-  } // if (c == 0x71)
-  else
-  {
-    while(1) ; // Loop forever if communication doesn't happen
+    Lcd_Clear();
+    Lcd_Write_String(LINE1,"CHECK YOUR GY273");
+    Lcd_Write_String(LINE2,"COMPASS SENSOR!");
+    while(1) ;
   }
-*/
   
-  Wire.begin();
-
-  Lcd_Clear();
-  Lcd_Write_String(LINE1,"CHECK YOUR GY273");
-  Lcd_Write_String(LINE2,"COMPASS SENSOR!");
-
-  // Initialise the sensor
-  if(!mag.begin())
-  {
-    // There was a problem detecting the HMC5883 ... check your connections
-    Lcd_Write_String(0,"No Compass Sensor");
-    delay (2000);
-  }
-
-/* 
-//  mySensor.setWire(&Wire);
-
-//  mySensor.beginAccel();
-//  mySensor.beginMag();  
-*/  
   Timer1.initialize(50);
   Timer1.attachInterrupt(Scan_Ultra); // blinkLED to run every 0.15 seconds
 
+  read_compass();
+  delay(100);
   read_compass();
   memComp = compass;
   
@@ -602,6 +625,8 @@ void setup(void)
   Lcd_Write_String(LINE1,"RCKA");
   Lcd_Write_String(LINE2,"ROBOT SOCCER 3.0");
 
+  if(CameraExist) pixy.init();
+  
 }
 
 void loop(void) 
@@ -612,195 +637,6 @@ void loop(void)
   uint16_t blocks;
   char buf[32]; 
 
-  /*
-  // grab blocks!
-while(1)
-{
-  blocks = pixy.getBlocks();
-    Lcd_Move(0, 6);
-  DigitDisplay(blocks);
- 
-  // If there are detect blocks, print them!
-  if (blocks)
-  {
-    i++;
-    
-    // do this (print) every 50 frames because printing every
-    // frame would bog down the Arduino
-    if (i%50==0)
-    {
-      sprintf(buf, "Detected %d:\n", blocks);
-      Serial.print(buf);
-      for (j=0; j<blocks; j++)
-      {
-        sprintf(buf, "  block %d: ", j);
-        Serial.print(buf); 
-        pixy.blocks[j].print();
-  Lcd_Move(1, 6);
-  DigitDisplay(pixy.blocks[j].x);
-
-
-      }
-    }
-  }  
-
-      Lcd_Data(0xDF);
-      Volt_Display(Voltage);
-
- }
- */
-
-/*
-  while(1)
-  {
-  // If intPin goes high, all data registers have new data
-  // On interrupt, check if data ready interrupt
-  if (myIMU.readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
-  {  
-    myIMU.readAccelData(myIMU.accelCount);  // Read the x/y/z adc values
-    myIMU.getAres();
-
-    // Now we'll calculate the accleration value into actual g's
-    // This depends on scale being set
-    myIMU.ax = (float)myIMU.accelCount[0]*myIMU.aRes; // - accelBias[0];
-    myIMU.ay = (float)myIMU.accelCount[1]*myIMU.aRes; // - accelBias[1];
-    myIMU.az = (float)myIMU.accelCount[2]*myIMU.aRes; // - accelBias[2];
-
-    myIMU.readGyroData(myIMU.gyroCount);  // Read the x/y/z adc values
-    myIMU.getGres();
-
-    // Calculate the gyro value into actual degrees per second
-    // This depends on scale being set
-    myIMU.gx = (float)myIMU.gyroCount[0]*myIMU.gRes;
-    myIMU.gy = (float)myIMU.gyroCount[1]*myIMU.gRes;
-    myIMU.gz = (float)myIMU.gyroCount[2]*myIMU.gRes;
-
-    myIMU.readMagData(myIMU.magCount);  // Read the x/y/z adc values
-    myIMU.getMres();
-    // User environmental x-axis correction in milliGauss, should be
-    // automatically calculated
-    myIMU.magbias[0] = +470.;
-    // User environmental x-axis correction in milliGauss TODO axis??
-    myIMU.magbias[1] = +120.;
-    // User environmental x-axis correction in milliGauss
-    myIMU.magbias[2] = +125.;
-
-    // Calculate the magnetometer values in milliGauss
-    // Include factory calibration per data sheet and user environmental
-    // corrections
-    // Get actual magnetometer value, this depends on scale being set
-    myIMU.mx = (float)myIMU.magCount[0]*myIMU.mRes*myIMU.magCalibration[0] -
-               myIMU.magbias[0];
-    myIMU.my = (float)myIMU.magCount[1]*myIMU.mRes*myIMU.magCalibration[1] -
-               myIMU.magbias[1];
-    myIMU.mz = (float)myIMU.magCount[2]*myIMU.mRes*myIMU.magCalibration[2] -
-               myIMU.magbias[2];
-  } // if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01)
-
-  // Must be called before updating quaternions!
-  myIMU.updateTime();
-
-  // Sensors x (y)-axis of the accelerometer is aligned with the y (x)-axis of
-  // the magnetometer; the magnetometer z-axis (+ down) is opposite to z-axis
-  // (+ up) of accelerometer and gyro! We have to make some allowance for this
-  // orientationmismatch in feeding the output to the quaternion filter. For the
-  // MPU-9250, we have chosen a magnetic rotation that keeps the sensor forward
-  // along the x-axis just like in the LSM9DS0 sensor. This rotation can be
-  // modified to allow any convenient orientation convention. This is ok by
-  // aircraft orientation standards! Pass gyro rate as rad/s
-//  MadgwickQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  my,  mx, mz);
-  MahonyQuaternionUpdate(myIMU.ax, myIMU.ay, myIMU.az, myIMU.gx*DEG_TO_RAD,
-                         myIMU.gy*DEG_TO_RAD, myIMU.gz*DEG_TO_RAD, myIMU.my,
-                         myIMU.mx, myIMU.mz, myIMU.deltat);
-
-  if (!AHRS)
-  {
-    myIMU.delt_t = millis() - myIMU.count;
-    if (myIMU.delt_t > 500)
-    {
-
-      myIMU.count = millis();
-
-    } // if (myIMU.delt_t > 500)
-  } // if (!AHRS)
-  else
-  {
-    // Serial print and/or display at 0.5 s rate independent of data rates
-    myIMU.delt_t = millis() - myIMU.count;
-
-    // update LCD once per half-second independent of read rate
-    if (myIMU.delt_t > 500)
-    {
-
-// Define output variables from updated quaternion---these are Tait-Bryan
-// angles, commonly used in aircraft orientation. In this coordinate system,
-// the positive z-axis is down toward Earth. Yaw is the angle between Sensor
-// x-axis and Earth magnetic North (or true North if corrected for local
-// declination, looking down on the sensor positive yaw is counterclockwise.
-// Pitch is angle between sensor x-axis and Earth ground plane, toward the
-// Earth is positive, up toward the sky is negative. Roll is angle between
-// sensor y-axis and Earth ground plane, y-axis up is positive roll. These
-// arise from the definition of the homogeneous rotation matrix constructed
-// from quaternions. Tait-Bryan angles as well as Euler angles are
-// non-commutative; that is, the get the correct orientation the rotations
-// must be applied in the correct order which for this configuration is yaw,
-// pitch, and then roll.
-// For more see
-// http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-// which has additional links.
-      myIMU.yaw   = atan2(2.0f * (*(getQ()+1) * *(getQ()+2) + *getQ() *
-                    *(getQ()+3)), *getQ() * *getQ() + *(getQ()+1) * *(getQ()+1)
-                    - *(getQ()+2) * *(getQ()+2) - *(getQ()+3) * *(getQ()+3));
-      myIMU.pitch = -asin(2.0f * (*(getQ()+1) * *(getQ()+3) - *getQ() *
-                    *(getQ()+2)));
-      myIMU.roll  = atan2(2.0f * (*getQ() * *(getQ()+1) + *(getQ()+2) *
-                    *(getQ()+3)), *getQ() * *getQ() - *(getQ()+1) * *(getQ()+1)
-                    - *(getQ()+2) * *(getQ()+2) + *(getQ()+3) * *(getQ()+3));
-      myIMU.pitch *= RAD_TO_DEG;
-      myIMU.yaw   *= RAD_TO_DEG;
-      // Declination of SparkFun Electronics (40°05'26.6"N 105°11'05.9"W) is
-      //   8° 30' E  ± 0° 21' (or 8.5°) on 2016-07-19
-      // - http://www.ngdc.noaa.gov/geomag-web/#declination
-      myIMU.yaw   -= 8.5;
-      myIMU.roll  *= RAD_TO_DEG;
-
-      myIMU.count = millis();
-      myIMU.sumCount = 0;
-      myIMU.sum = 0;
-
-
-  float heading = atan2(myIMU.my, myIMU.mx);
-
-  // Once you have your heading, you must then add your 'Declination Angle', which is the 'Error' of the magnetic field in your location.
-  // Find yours here: http://www.magnetic-declination.com/
-  // Mine is: -13* 2' W, which is ~13 Degrees, or (which we need) 0.22 radians
-  // If you cannot find your Declination, comment out these two lines, your compass will be slightly off.
-
-  float declinationAngle = 0.22;
-//  heading += declinationAngle;
-  
-  // Correct for when signs are reversed.
-  if(heading < 0)
-    heading += 2*PI;
-    
-  // Check for wrap due to addition of declination.
-  if(heading > 2*PI)
-    heading -= 2*PI;
-   
-  // Convert radians to degrees for readability.
-  compass = heading * 180/M_PI; 
-
-      Lcd_Move(0, 6);
-      DigitDisplay(compass);
-
-    } // if (myIMU.delt_t > 500)
-  } // if (AHRS)
-      Lcd_Data(0xDF);
-      Volt_Display(Voltage);
-
-  }
-*/
-  
   read_compass();
   Lcd_Move(0, 6);
   DigitDisplay(compass);
@@ -823,14 +659,14 @@ while(1)
       {
         while(PREV) ;
         menu--;
-        if (menu<0) menu=6;
+        if (menu<0) menu=7;
         menu_display(menu);
       }
       if(NEXT)
       {
         while(NEXT) ;
         menu++;
-        if (menu>6) menu=0;
+        if (menu>7) menu=0;
         menu_display(menu);
       }
       if(ENTER)
@@ -844,13 +680,15 @@ while(1)
                   break;
           case 2: PROGRAM3();
                   break;
-          case 3: view_ir();
+          case 3: PROGRAM4();
                   break;
-          case 4: view_capture();
+          case 4: view_ir();
                   break;
-          case 5: view_ultra();
+          case 5: view_capture();
                   break;
-          case 6: view_line();
+          case 6: view_ultra();
+                  break;
+          case 7: view_line();
                   break;
         }
 
