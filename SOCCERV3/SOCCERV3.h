@@ -79,8 +79,11 @@ volatile unsigned char ADC_CNT = 0;
 volatile unsigned int temp_dir=0;
 volatile unsigned int temp_ir=0;
 
-volatile double memComp=180;
+volatile int memComp=180;
 
+volatile int xin, yin;
+volatile int xoff, yoff;
+volatile float xs, ys;
 void echo_clear(void)
 {
   for(int i=0; i<4;i++)
@@ -201,12 +204,14 @@ void Scan_ADC()
   ADC_Raw[NumberOfSamples][tempseq]=tmpSum;
   
   ADC_Value[tempseq] = tmpSum >> 2;
+//  ADC_Value[tempseq] = tmpSum >> 1;  
+
   
   ADC_CNT = 0;
   
   if (ADC_SEQ<12)
   {
-    if(ADC_Value[tempseq] >= temp_ir)
+    if(ADC_Value[tempseq] > temp_ir)
     {
       temp_ir=ADC_Value[tempseq];
       temp_dir=tempseq;
@@ -246,6 +251,8 @@ void Scan_ADC()
     tmpLine = LineDetected;
     tmpLine = ~(tmpLine<<4) & 0xF0;
 
+//    if(LineDetected && !escape)  move(0,0,0);
+    
     PORTL = tmpLine  | (ball_dir & 0x0F);
 
     temp_ir=0;
@@ -326,7 +333,7 @@ void read_compass()
     {
       x = Wire.read()<<8;   //X msb
       x |= Wire.read();     //X lsb
-      z = Wire.read();      //Z msb
+      z = Wire.read()<<8;      //Z msb
       z = Wire.read();      //Z lsb
       y = Wire.read()<<8;   //Y msb
       y |= Wire.read();     //Y lsb
@@ -337,13 +344,18 @@ void read_compass()
       y = Wire.read();      //y lsb
       y |= Wire.read()<<8;  //y msb
       z = Wire.read();      //z lsb
-      z = Wire.read();      //z msb
+      z = Wire.read()<<8;      //z msb
     }
+    xin = x;
+    yin = y;
   }
  
+  x=(int)((float)(x+xoff)*xs);
+  y=(int)((float)(y+yoff)*ys);
+
   // Hold the module so that Z is pointing 'up' and you can measure the heading with x & y
   // Calculate heading when the magnetometer is level, then correct for signs of axis.
-
+  
   float heading = atan2(y, x);
 
   // Once you have your heading, you must then add your 'Declination Angle', which is the 'Error' of the magnetic field in your location.
@@ -363,9 +375,9 @@ void read_compass()
     heading -= 2*PI;
    
   // Convert radians to degrees for readability.
-  compass = heading * 180/M_PI; 
+  absCompass = heading * 180/M_PI; 
 
-  compass -= memComp;
+  compass = absCompass - memComp;
   compass += 180;
   if(compass<0) compass+=360;
   if(compass>359) compass-=360;
